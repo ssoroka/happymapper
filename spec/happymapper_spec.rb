@@ -11,10 +11,12 @@ describe HappyMapper do
         include HappyMapper
 
         def self.to_s
-          'Foo'
+          'Boo'
         end
       end
     end
+
+    class Boo; include HappyMapper end
 
     it "should set attributes to an array" do
       @klass.attributes.should == []
@@ -84,7 +86,7 @@ describe HappyMapper do
     end
 
     it "should default tag name to lowercase class" do
-      @klass.tag_name.should == 'foo'
+      @klass.tag_name.should == 'boo'
     end
 
     it "should default tag name of class in modules to the last constant lowercase" do
@@ -98,7 +100,7 @@ describe HappyMapper do
     end
 
     it "should allow setting a namespace" do
-      @klass.namespace(namespace = "foo")
+      @klass.namespace(namespace = "boo")
       @klass.namespace.should == namespace
     end
 
@@ -170,7 +172,13 @@ describe HappyMapper do
     address.postcode.should == '26131'
     address.housenumber.should == '23'
     address.city.should == 'Oldenburg'
-    address.country.should == 'Germany'
+    address.country.class.should == Country
+  end
+
+  it "should parse text node correctly" do
+    address = Address.parse(fixture_file('address.xml'), :single => true)
+    address.country.name.should == 'Germany'
+    address.country.code.should == 'de'
   end
 
   it "should parse xml with default namespace (amazon)" do
@@ -210,6 +218,12 @@ describe HappyMapper do
     third.places.size.should == 2
     third.places[0].name.should == 'Work'
     third.places[1].name.should == 'Home'
+  end
+
+  it "should parse xml with element name different to class name" do
+    game = QuarterTest::Game.parse(fixture_file('quarters.xml'))
+    game.q1.start.should == '4:40:15 PM'
+    game.q2.start.should == '5:18:53 PM'
   end
 
   it "should parse xml that has elements with dashes" do
@@ -337,10 +351,48 @@ describe HappyMapper do
     tree.version.should == '1.0.20071213.942'
     tree.status_message.should == 'OK'
     tree.status_code.should == '200'
-    # tree.people.size.should == 1
-    # tree.people.first.version.should == '1199378491000'
-    # tree.people.first.modified.should == Time.utc(2008, 1, 3, 16, 41, 31) # 2008-01-03T09:41:31-07:00
-    # tree.people.first.id.should == 'KWQS-BBQ'
+    tree.persons.person.size.should == 1
+    tree.persons.person.first.version.should == '1199378491000'
+    tree.persons.person.first.modified.should == Time.utc(2008, 1, 3, 16, 41, 31) # 2008-01-03T09:41:31-07:00
+    tree.persons.person.first.id.should == 'KWQS-BBQ'
+    tree.persons.person.first.information.alternateIds.ids.should_not be_kind_of(String)
+    tree.persons.person.first.information.alternateIds.ids.size.should == 8
+  end
+
+  it "should parse multiple images" do
+    artist = Artist.parse(fixture_file('multiple_primitives.xml'))
+    artist.name.should == "value"
+    artist.images.size.should == 2
+  end
+
+  it "should parse lastfm namespaces" do
+    l = Location.parse(fixture_file('lastfm.xml'))
+    l.first.latitude.should == "51.53469"
+  end
+
+  describe 'Xml Content' do
+    before(:each) do
+      file_contents = fixture_file('dictionary.xml')
+      @records = Dictionary::Record.parse(file_contents)
+    end
+
+    it "should parse XmlContent" do
+      @records.first.definitions.first.text.should ==
+        'a large common parrot, <bn>Cacatua galerita</bn>, predominantly white, with yellow on the undersides of wings and tail and a forward curving yellow crest, found in Australia, New Guinea and nearby islands.'
+    end
+
+    it "should save object's xml content" do
+      @records.first.variants.first.xml_content.should ==
+        'white <tag>cockatoo</tag>'
+      @records.first.variants.last.to_html.should ==
+        '<em>white</em> cockatoo'
+    end
+  end
+
+  it "should parse ambigous items" do
+    items = AmbigousItems::Item.parse(fixture_file('ambigous_items.xml'),
+                                       :xpath => '/ambigous/my-items')
+    items.map(&:name).should == %w(first second third).map{|s| "My #{s} item" }
   end
 
   describe 'nested elements with namespaces' do

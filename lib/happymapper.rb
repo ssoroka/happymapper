@@ -1,8 +1,10 @@
 require 'date'
 require 'time'
-require 'xml'
+require 'rubygems'
+require 'nokogiri'
 
 class Boolean; end
+class XmlContent; end
 
 module HappyMapper
 
@@ -50,6 +52,15 @@ module HappyMapper
       @elements[to_s] || []
     end
 
+    def text_node(name, type, options={})
+      @text_node = TextNode.new(name, type, options)
+      attr_accessor @text_node.method_name.intern
+    end
+
+    def has_xml_content
+      attr_accessor :xml_content
+    end
+    
     def has_one(name, type, options={})
       element name, type, {:single => true}.merge(options)
     end
@@ -67,7 +78,7 @@ module HappyMapper
     end
 
     def tag(new_tag_name)
-      @tag_name = new_tag_name.to_s
+      @tag_name = new_tag_name.to_s unless new_tag_name.nil? || new_tag_name.to_s.empty?
     end
 
     def tag_name
@@ -75,37 +86,75 @@ module HappyMapper
     end
 
     def parse(xml, options = {})
-      if xml.is_a?(XML::Node)
+      # locally scoped copy of namespace for this parse run
+      namespace = @namespace
+
+      if xml.is_a?(Nokogiri::XML::Node)
         node = xml
       else
-        if xml.is_a?(XML::Document)
+        if xml.is_a?(Nokogiri::XML::Document)
           node = xml.root
         else
-          node = XML::Parser.string(xml).parse.root
+          xml = Nokogiri::XML(xml)
+          node = xml.root
         end
 
         root = node.name == tag_name
       end
 
-      namespace = @namespace || (node.namespaces && node.namespaces.default)
-      namespace = "#{DEFAULT_NS}:#{namespace}" if namespace
+      # This is the entry point into the parsing pipeline, so the default
+      # namespace prefix registered here will propagate down
+      namespaces   = options[:namespaces]
+      namespaces ||= {}
+      namespaces   = namespaces.merge(xml.collect_namespaces) if xml.respond_to?(:collect_namespaces)
+      namespaces   = namespaces.merge(xml.namespaces)
 
-      xpath = root ? '/' : './/'
-      xpath += "#{DEFAULT_NS}:" if namespace
-      xpath += tag_name
+      if namespaces.has_key?("xmlns")
+        namespace ||= DEFAULT_NS
+        namespaces[namespace] = namespaces.delete("xmlns")
+      elsif namespaces.has_key?(DEFAULT_NS)
+        namespace ||= DEFAULT_NS
+      end
 
-      nodes = node.find(xpath, Array(namespace))
+      nodes = options.fetch(:nodes) do
+        xpath  = (root ? '/' : './/')
+        xpath  = options[:xpath].to_s.sub(/([^\/])$/, '\1/') if options[:xpath]
+        xpath += "#{namespace}:" if namespace
+        #puts "parse: #{xpath}"
+
+        nodes = []
+
+        # when finding nodes, do it in this order:
+        # 1. specified tag
+        # 2. name of element
+        # 3. tag_name (derived from class name by default)
+        [options[:tag], options[:name], tag_name].compact.each do |xpath_ext|
+          nodes = node.xpath(xpath + xpath_ext.to_s, namespaces)
+          break if nodes && !nodes.empty?
+        end
+
+        nodes
+      end
+
       collection = nodes.collect do |n|
         obj = new
 
         attributes.each do |attr|
           obj.send("#{attr.method_name}=",
-                    attr.from_xml_node(n, namespace))
+                    attr.from_xml_node(n, namespace, namespaces))
         end
 
         elements.each do |elem|
-          obj.send("#{elem.method_name}=",
-                    elem.from_xml_node(n, namespace))
+          obj.send("#{elem.method_name}=", 
+                    elem.from_xml_node(n, namespace, namespaces))
+        end
+
+        obj.send("#{@text_node.method_name}=", 
+                  @text_node.from_xml_node(n, namespace, namespaces)) if @text_node
+
+        if obj.respond_to?('xml_content=')
+          n = n.children if n.respond_to?(:children)
+          obj.xml_content = n.to_xml 
         end
 
         obj.send("#{@content}=", n.content) if @content
@@ -130,3 +179,7 @@ end
 require 'happymapper/item'
 require 'happymapper/attribute'
 require 'happymapper/element'
+# require File.join(dir, 'happymapper/item')
+# require File.join(dir, 'happymapper/attribute')
+# require File.join(dir, 'happymapper/element')
+# require File.join(dir, 'happymapper/text_node')
