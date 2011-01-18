@@ -57,6 +57,7 @@ module HappyMapper
             end
           end
         else
+          puts "Parsing #{constant}\n #{xpath_options.inspect}\n #{node.inner_html}"
           constant.parse(node, options.merge(:namespaces => xpath_options))
         end
       end
@@ -65,9 +66,10 @@ module HappyMapper
     def xpath(namespace = self.namespace)
       xpath  = ''
       xpath += './/' if options[:deep]
-      xpath += "#{DEFAULT_NS}:" if namespace
+      xpath += "#{namespace}:" if namespace
+      # xpath += "#{DEFAULT_NS}:" if namespace
       xpath += tag
-      # puts "xpath: #{xpath}"
+      puts "xpath: #{xpath}"
       xpath
     end
 
@@ -151,6 +153,8 @@ module HappyMapper
         
         if element?
           if options[:single]
+            path = xpath(namespace)
+            puts "Searching in #{path} against #{node.path} #{namespace}"
             result = node.xpath(xpath(namespace), xpath_options)
 
             if result
