@@ -163,7 +163,7 @@ end
 
 class Radar
   include HappyMapper
-  has_many :places, Place
+  has_many :places, Place, :tag => "places/place"
 end
 
 class Post
@@ -228,6 +228,15 @@ class CurrentWeather
   element :current_condition, String, :tag => 'current-condition', :attributes => {:icon => String}
 end
 
+class Country
+  include HappyMapper
+  
+  tag 'country'
+  
+  attribute :code, String
+  content :name
+end
+
 class Address
   include HappyMapper
 
@@ -236,8 +245,29 @@ class Address
   element :postcode, String
   element :housenumber, String
   element :city, String
-  element :country, String
+  
+  has_one :country, Country
 end
+
+module QuarterTest
+  
+  class Quarter
+    include HappyMapper
+    
+    element :start, String
+  end
+  
+  class Game
+    include HappyMapper
+
+    has_one :q1, Quarter
+    has_one :q2, Quarter
+    has_one :q3, Quarter
+    has_one :q4, Quarter
+  end
+  
+end
+
 
 # for type coercion
 class ProductGroup < String; end

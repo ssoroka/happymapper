@@ -415,7 +415,7 @@ describe HappyMapper do
         include HappyMapper
 
         tag 'EDXLDistribution'
-        has_one :alert, Alert
+        has_one :alert, Alert, :deep => true
       end
     end
 
